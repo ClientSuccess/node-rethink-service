@@ -2,7 +2,7 @@
   "name": "clientsuccess-noderethinkservice",
   "version": "0.1.0",
   "description": "",
-  "main": "index.js",
+  "main": "main.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/ClientSuccess/node-rethink-service.git"
