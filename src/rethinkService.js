@@ -115,12 +115,12 @@ function _getRDash() {
 
 module.exports = model => {
     r = require('rethinkdbdash')({
-        max: 100,
+        max: model.poolMax || 100,
         port: model.port,
         host: model.host,
         authKey: model.authKey,
-        cursor: true,
-        ssl: {ca: model.cert}
+        cursor: model.useCursors,
+        ssl: model.cert ? { ca: model.cert } : false
     });
 
     return {
