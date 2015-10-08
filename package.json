@@ -1,6 +1,6 @@
 {
   "name": "clientsuccess-noderethinkservice",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "",
   "main": "lib/main.js",
   "repository": {
@@ -10,7 +10,7 @@
   "author": "ClientSuccess",
   "scripts": {
     "prepublish": "babel src --out-dir lib",
-    "cspublish": "npm run prepublish && npm publish"
+    "cspublish": "npm run prepublish && npm publish && rm -rf lib"
   },
   "dependencies": {
     "babel": "^5.6.14",
