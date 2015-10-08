@@ -53,7 +53,7 @@ function _replace(model) {
         if (!document || 0 === document.length) {
             return Promise.reject(`_replace - the document is empty ${util.inspect(document)}`);
         } else {
-            return r.db(model.db).table(model.table).insert(_removeUndefinedFields(document), {conflict: 'replace', returnChanges: true}).run();
+            return r.db(model.db).table(model.table).insert(_removeKeyForUndefinedFields(document), {conflict: 'replace', returnChanges: true}).run();
         }
     });
 }
@@ -94,7 +94,7 @@ function _getUndefinedFields(document) {
     return R.filter(fieldName => R.isNil(document[fieldName]), R.keys(document));
 }
 
-function _removeUndefinedFields(document) {
+function _removeKeyForUndefinedFields(document) {
 
     return R.isArrayLike(document)
         ? R.map(document => R.omit(_getUndefinedFields(document), document), document)
@@ -102,7 +102,7 @@ function _removeUndefinedFields(document) {
 }
 
 function _setUndefinedFieldsNull(document) {
-    let doOmit = doc => R.tail(R.map(field => R.assoc(field, null, doc), _getUndefinedFields(doc)));
+    let doOmit = doc => _getUndefinedFields(doc) ? R.tail(R.map(field => R.assoc(field, null, doc), _getUndefinedFields(doc))) : doc;
 
     return R.isArrayLike(document)
         ? R.map(doOmit, document)
