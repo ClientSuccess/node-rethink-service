@@ -102,11 +102,19 @@ function _removeKeyForUndefinedFields(document) {
 }
 
 function _setUndefinedFieldsNull(document) {
-    let doOmit = doc => _getUndefinedFields(doc) ? R.tail(R.map(field => R.assoc(field, null, doc), _getUndefinedFields(doc))) : doc;
-
     return R.isArrayLike(document)
-        ? R.map(doOmit, document)
-        : doOmit(document);
+        ? R.map(__setUndefinedFieldsToNullOnADocument, document)
+        : __setUndefinedFieldsToNullOnADocument(document);
+}
+
+function __setUndefinedFieldsToNullOnADocument(doc) {
+    let undefinedFields = _getUndefinedFields(doc);
+
+    if (undefinedFields && undefinedFields.length > 0) {
+        return R.tail(R.map(field => R.assoc(field, null, doc), undefinedFields));
+    } else {
+        return doc;
+    }
 }
 
 function _getRDash() {
