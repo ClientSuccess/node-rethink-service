@@ -1,145 +1,62 @@
+'use strict';
+
 var util = require('util');
 var R = require('ramda');
 var Promise = require('bluebird');
-var r;
 
-function _dbExists(model) {
-    return r.dbList().contains(model.db).run();
-}
+const dbExists = (r, model) => r.dbList().contains(model.db).run();
+const createDb = (r, model) => r.dbCreate(model.db).run().then(() => Promise.resolve('DB_CREATED'));
+const createDbIfNot = (r, model) => dbExists(r, model).then(dbExists => (dbExists) ? Promise.resolve('DB_EXISTS') : createDb(r, model));
+const tableExists = (r, model) => createDbIfNot(r, model).then(() => r.db(model.db).tableList().contains(model.table).run());
+const createTable = (r, model) => createDbIfNot(r, model).then(() => r.db(model.db).tableCreate(model.table, {primaryKey: model.primaryKey}).run().then(() => Promise.resolve('TABLE_CREATED')));
+const createTableIfNot = (r, model) => createDbIfNot(r, model).then(() => tableExists(r, model)).then(tableExists => (tableExists) ? Promise.resolve('TABLE_EXISTS') : createTable(r, model));
+const addIndex = (r, model) => index => r.db(model.db).table(model.table).indexCreate(index);
+const addIndices = (r, model) => indices => Promise.settle(R.map(query => query.run(), R.map(addIndex(r, model), indices)));
+const getUndefinedFields = document => R.filter(fieldName => R.isNil(document[fieldName]), R.keys(document));
+const removeUndefinedFields = document => R.isArrayLike(document)
+    ? R.map(document => R.omit(getUndefinedFields(document), document), document)
+    : R.omit(getUndefinedFields(document), document);
 
-function _createDbIfNot(model) {
-    return _dbExists(model).then(dbExists => (dbExists) ? Promise.resolve('DB_EXISTS') : _createDb(model));
-}
+const getTransformations = R.curry((value, fieldNames) => R.pipe(R.map(fieldName => [fieldName, R.always(value)]), R.fromPairs)(fieldNames));
+const assocAll = R.curry((fieldNames, value, doc) => R.evolve(getTransformations(value, fieldNames), doc));
+const setUndefinedFieldsNull = R.ifElse(
+        R.isArrayLike,
+        R.map(doc => getUndefinedFields(doc)),
+        R.pipe(getUndefinedFields,assocAll(R.__, null))
+    );
 
-function _tableExists(model) {
-    return _createDbIfNot(model).then(() => r.db(model.db).tableList().contains(model.table).run());
-}
-
-function _createDb(model) {
-    return r.dbCreate(model.db).run().then(() => Promise.resolve('DB_CREATED'));
-}
-
-function _createTable(model) {
-    return _createDbIfNot(model)
-        .then(() => r.db(model.db).tableCreate(model.table, {primaryKey: model.primaryKey}).run()
-            .then(() => Promise.resolve('TABLE_CREATED')));
-}
-
-function _createTableIfNot(model) {
-    return _createDbIfNot(model)
-        .then(() => _tableExists(model))
-        .then(tableExists => (tableExists)
-            ? Promise.resolve('TABLE_EXISTS')
-            : _createTable(model));
-}
-
-function _createDbAndTable(model) {
-    return () => (model.db && model.table)
-        ? _createTableIfNot(model)
-        .then(() => _addIndices(model)(model.indices || []))
-        : Promise.reject('INVALID_MODEL');
-}
-
-function _addIndices(model) {
-    return indices => Promise.settle(R.map(query => query.run(), R.map(_addIndex(model), indices)));
-}
-
-function _addIndex(model) {
-    return index => r.db(model.db).table(model.table).indexCreate(index);
-}
-
-function _replace(model) {
-    return (document => {
+const _init = (r, model) => ({
+    createDbAndTable: () => (model.db && model.table)
+            ? createTableIfNot(r, model).then(() => addIndices(r, model)(model.indices || []))
+            : Promise.reject('INVALID_MODEL'),
+    replace: document => {
         if (!document || 0 === document.length) {
-            return Promise.reject(`_replace - the document is empty ${util.inspect(document)}`);
+            return Promise.reject(`***ALERTS_API*** _replace() no connection made to rethink to _replace - the document is empty`);
         } else {
-            return r.db(model.db).table(model.table).insert(_removeKeyForUndefinedFields(document), {conflict: 'replace', returnChanges: true}).run();
+            return r.db(model.db).table(model.table).insert(removeUndefinedFields(document), {conflict: 'replace', returnChanges: true}).run();
         }
-    });
-}
-
-function _update(model) {
-    return (document => {
+    },
+    update: document => {
         if (!document || 0 === document.length) {
-            return Promise.reject('_update - the document is empty');
+            return Promise.reject('***ALERTS_API***  _replace() no connection made to rethink to _update - the document is empty');
         } else {
-            return r.db(model.db).table(model.table).insert(_setUndefinedFieldsNull(document), {conflict: 'update', returnChanges: true}).run();
+            return r.db(model.db).table(model.table).insert(setUndefinedFieldsNull(document), {conflict: 'update', returnChanges: true}).run();
         }
-    });
-}
-
-function _findById(model) {
-    return id => r.db(model.db).table(model.table).get(id).run();
-}
-
-function _findByIds(model) {
-    return ids => r.db(model.db).table(model.table).getAll(r.args(ids)).run()
-        .then(cursor => cursor.toArray());
-}
-
-function _subscribeChanges(model) {
-    return () => r.db(model.db).table(model.table).changes().run();
-}
-
-function _findMaxBy(model) {
-    return field => r.db(model.db).table(model.table).max(field).pluck(field).run();
-}
-
-function _findByFilter(model) {
-    return filter => r.db(model.db).table(model.table).filter(filter).run()
-        .then(cursor => cursor.toArray());
-}
-
-function _getUndefinedFields(document) {
-    return R.filter(fieldName => R.isNil(document[fieldName]), R.keys(document));
-}
-
-function _removeKeyForUndefinedFields(document) {
-
-    return R.isArrayLike(document)
-        ? R.map(document => R.omit(_getUndefinedFields(document), document), document)
-        : R.omit(_getUndefinedFields(document), document);
-}
-
-function _setUndefinedFieldsNull(document) {
-    return R.isArrayLike(document)
-        ? R.map(__setUndefinedFieldsToNullOnADocument, document)
-        : __setUndefinedFieldsToNullOnADocument(document);
-}
-
-function __setUndefinedFieldsToNullOnADocument(doc) {
-    let undefinedFields = _getUndefinedFields(doc);
-
-    if (undefinedFields && undefinedFields.length > 0) {
-        return R.tail(R.map(field => R.assoc(field, null, doc), undefinedFields));
-    } else {
-        return doc;
-    }
-}
-
-function _getRDash() {
-    return r;
-}
+    },
+    findById: id => r.db(model.db).table(model.table).get(id).run(),
+    findAll: () => r.db(model.db).table(model.table).run(),
+    findByIds: ids => r.db(model.db).table(model.table).getAll(r.args(ids)).run().then(cursor => cursor.toArray()),
+    subscribeChanges: () => r.db(model.db).table(model.table).changes().run(),
+    findMaxBy: field => r.db(model.db).table(model.table).max(field).pluck(field).run(),
+    findByFilter: filter => r.db(model.db).table(model.table).filter(filter).run().then(cursor => cursor.toArray()),
+    getRDash: r
+});
 
 module.exports = model => {
-    r = require('rethinkdbdash')({
+    return _init(require('rethinkdbdash')({
         max: model.poolMax || 100,
         port: model.port,
         host: model.host,
-        authKey: model.authKey,
         cursor: model.useCursors,
-        ssl: model.cert ? { ca: model.cert } : false
-    });
-
-    return {
-        createDbAndTable: _createDbAndTable(R.clone(model)),
-        subscribeChanges: _subscribeChanges(R.clone(model)),
-        replace: _replace(R.clone(model)),
-        update: _update(R.clone(model)),
-        findById: _findById(R.clone(model)),
-        findByIds: _findByIds(R.clone(model)),
-        findMaxBy: _findMaxBy(R.clone(model)),
-        findByFilter: _findByFilter(R.clone(model)),
-        getRDash: _getRDash
-    };
+    }), R.clone(model));
 };
