@@ -1,6 +1,6 @@
 {
   "name": "clientsuccess-noderethinkservice",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "",
   "main": "lib/main.js",
   "repository": {
@@ -14,8 +14,8 @@
   },
   "dependencies": {
     "babel": "5.8.34",
-    "bluebird": "^2.10.0",
-    "ramda": "^0.17.1",
-    "rethinkdbdash": "^2.1.8"
+    "bluebird": "2.10.0",
+    "ramda": "0.17.1",
+    "rethinkdbdash": "2.2.18"
   }
 }
